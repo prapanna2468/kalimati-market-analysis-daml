@@ -1,0 +1,514 @@
+# importing the libraries that I need for doing the cleaning,modeling and clustering
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_squared_error, r2_score
+
+# This function is for loading the data and cleaning it
+def load_and_clean_data(filepath):
+    # Read the CSV file and give names to the columns
+    df = pd.read_csv(filepath, header=None, names=[
+        'Commodity', 'Date', 'Unit', 'Min Price', 'Max Price', 'Avg Price'
+    ])
+
+    # Change the Date column to datetime type
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+
+    # Remove rows where Date is missing or wrong
+    df = df.dropna(subset=['Date'])
+
+    # Make sure price columns are numbers
+    for col in ['Min Price', 'Max Price', 'Avg Price']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Remove rows where price values are missing
+    df = df.dropna(subset=['Min Price', 'Max Price', 'Avg Price'])
+
+    # Remove outliers from price columns so they don’t affect the results
+    for col in ['Min Price', 'Max Price', 'Avg Price']:
+        q_low = df[col].quantile(0.01)
+        q_high = df[col].quantile(0.99)
+        df = df[(df[col] >= q_low) & (df[col] <= q_high)]
+
+    print("\n--- Cleaned Data Summary ---")
+    print("Shape:", df.shape)
+    print("\nColumns:")
+    print(df.dtypes)
+    print("\nMissing Values:")
+    print(df.isnull().sum())
+    print("\nSample Rows:")
+    print(df.head())
+
+    return df
+
+# This function makes new columns to help with analysis
+def feature_engineering(df):
+    df['Year'] = df['Date'].dt.year
+    df['Month'] = df['Date'].dt.month
+    df['DayOfWeek'] = df['Date'].dt.day_name()
+    df['Price Range'] = df['Max Price'] - df['Min Price']
+    return df
+
+# This function makes a graph to show average price trend over time
+def price_trend_plot(df):
+    monthly_avg = df.groupby(['Year', 'Month'])['Avg Price'].mean().reset_index()
+    monthly_avg['YearMonth'] = monthly_avg['Year'].astype(str) + '-' + monthly_avg['Month'].astype(str)
+
+    plt.figure(figsize=(12,6))
+    sns.lineplot(data=monthly_avg, x='YearMonth', y='Avg Price', marker='o')
+    plt.xticks(rotation=45)
+    plt.title('Average Price Trend Over Time')
+    plt.tight_layout()
+    plt.savefig('average_price_trend.png')  # Save the graph as a picture
+    plt.show()
+
+# This function saves the cleaned data so I can use it in Power BI.
+def save_cleaned_data(df, output_path='cleaned_kalimati_data.csv'):
+    df.to_csv(output_path, index=False)
+    print(f"Cleaned data saved at: {output_path}")
+
+# File path of my dataset
+filepath = '/content/drive/MyDrive/kalimati-tarkari-prices-from-may-2021-to-september-2023.csv'
+#Functions
+df = load_and_clean_data(filepath)
+df = feature_engineering(df)
+price_trend_plot(df)
+save_cleaned_data(df)
+
+%matplotlib inline
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import missingno as msno
+
+sns.set(style="whitegrid")
+plt.rcParams["figure.figsize"] = (12, 6)
+
+# Utility: Excluding 'year' from numeric analysis
+def get_useful_numeric_columns(df):
+    return [col for col in df.select_dtypes(include='number').columns if col.lower() != 'year']
+
+# 1. Data Distribution
+def plot_data_distribution(df):
+    cols = get_useful_numeric_columns(df)
+    if not cols:
+        print("\n[INFO] No numeric columns to plot distribution.")
+        return
+    df[cols].hist(bins=30, figsize=(15, 10))
+    plt.suptitle("Data Distribution", fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+# 2. Missing Data
+def plot_missing_data(df):
+    print("\nMissing values per column:\n")
+    print(df.isnull().sum())
+    msno.matrix(df)
+    plt.title("Missing Data", fontsize=16)
+    plt.show()
+
+# 3. Outliers (Boxplots)
+def plot_outliers(df):
+    cols = get_useful_numeric_columns(df)
+    if not cols:
+        print("\n[INFO] No numeric columns for boxplots.")
+        return
+    for col in cols:
+        plt.figure(figsize=(10, 4))
+        sns.boxplot(x=df[col])
+        plt.title(f"Boxplot - {col}", fontsize=14)
+        plt.show()
+
+# 4. Correlation Graph (Pairplot)
+def plot_correlation_graph(df):
+    cols = get_useful_numeric_columns(df)
+    if len(cols) < 2:
+        print("\n[INFO] Not enough numeric columns for correlation graph.")
+        return
+    print("\nGenerating Pairplot (this may take time for large datasets)...")
+    grid = sns.pairplot(df[cols])
+    grid.fig.suptitle("Correlation Graph (Pairplot)", fontsize=16, y=1.02)
+    plt.show()
+
+# 5. Data Types
+def show_data_types(df):
+    print("\nData Types:\n")
+    print(df.dtypes)
+    print("\nCounts:")
+    print(df.dtypes.value_counts())
+
+# 6. Combined Boxplots
+def box_plots(df):
+    cols = get_useful_numeric_columns(df)
+    if not cols:
+        print("\n[INFO] No numeric columns for combined boxplots.")
+        return
+    melted = df[cols].melt()
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(x='variable', y='value', data=melted)
+    plt.title("Boxplots of Numeric Columns", fontsize=16)
+    plt.xticks(rotation=45)
+    plt.show()
+
+
+    df = pd.read_csv("/content/cleaned_kalimati_data.csv")
+
+show_data_types(df)
+plot_data_distribution(df)
+plot_missing_data(df)
+plot_outliers(df)
+plot_correlation_graph(df)
+box_plots(df)
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+#Feature Engineering
+# Convert Date column to datetime
+df['Date'] = pd.to_datetime(df['Date'])
+
+# Extract useful time features
+df['Day'] = df['Date'].dt.day
+df['Day_of_Week'] = df['Date'].dt.day_name()
+
+# Approximate a Festival Period (e.g., Dashain-Tihar) in Sept-Nov
+df['Festival_Period'] = df['Month'].isin([9, 10, 11]).astype(int)
+
+# Create an interaction feature between Commodity and Season
+df['Commodity_Season'] = df['Commodity'] + "_" + df['Season']
+
+# One-Hot Encoding
+# Convert categorical variables into numerical dummy variables
+df_encoded = pd.get_dummies(
+    df,
+    columns=['Commodity', 'Unit', 'Day_of_Week', 'Season', 'Commodity_Season'],
+    prefix=['Item', 'Unit', 'DoW', 'Season', 'ItemSeason'],
+    drop_first=True
+)
+
+# Print the shape to verify encoding
+print(f" Encoded dataset shape: {df_encoded.shape}")
+
+# Define Features and Target
+# Remove columns that would leak target information
+leak_cols = ['Avg Price', 'Min Price', 'Max Price', 'Price Range', 'Price_Class', 'Date']
+X_all = df_encoded.drop(columns=leak_cols, errors='ignore')
+y_all = df['Avg Price']
+
+# Select final features similar to friend's approach
+features_svr = [
+    'Year', 'Month', 'Day', 'Festival_Period'
+] + [col for col in X_all.columns if (
+    col.startswith('Item_') or
+    col.startswith('Season_') or
+    col.startswith('DoW_')
+)]
+
+# Final feature matrix and target vector
+X = X_all[features_svr]
+y = y_all
+
+print(f"Selected features: {len(features_svr)} columns")
+
+# Create a pipeline that scales features then fits SVR
+svr_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('svr', SVR(kernel='rbf', C=10, epsilon=0.1))
+])
+
+print(" SVR Pipeline created with scaling and RBF kernel")
+
+# Perform 5-Fold Cross-Validation
+# Use KFold cross-validation to estimate model performance
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+cv_scores = cross_val_score(
+    svr_pipeline,
+    X,
+    y,
+    cv=kf,
+    scoring='neg_root_mean_squared_error'
+)
+
+cv_rmse_mean = -cv_scores.mean()
+cv_rmse_std = cv_scores.std()
+
+print("\n SVR 5-Fold Cross-Validation Results:")
+print(f"   • Mean RMSE: {cv_rmse_mean:.2f}")
+print(f"   • Std Dev RMSE: {cv_rmse_std:.2f}")
+
+# Train-Test Split
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+print(f" Training set shape: {X_train.shape}")
+print(f" Testing set shape: {X_test.shape}")
+
+
+#Train the SVR Model on Training Data
+print("\n STEP 8: Fitting pipeline on training data...")
+svr_pipeline.fit(X_train, y_train)
+print(" SVR Model training complete.")
+
+# Predict on Test Set
+print("\n STEP 9: Predicting on test data...")
+y_pred = svr_pipeline.predict(X_test)
+print(" Predictions complete.")
+
+# Evaluate Performance on Test Set
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+
+print("\n SVR FINAL TEST SET RESULTS:")
+print(f"   • RMSE: {rmse:.2f}")
+print(f"   • MAE: {mae:.2f}")
+print(f"   • R² Score: {r2:.4f}")
+print(f"   • Mean Absolute Percentage Error: {mape:.2f}%")
+
+# Plot Actual vs Predicted Prices
+plt.figure(figsize=(6, 6))
+plt.scatter(y_test, y_pred, alpha=0.3, color='green')
+plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--')
+plt.xlabel("Actual Avg Price")
+plt.ylabel("Predicted Avg Price")
+plt.title("SVR: Actual vs Predicted Avg Price")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.cluster import KMeans
+from imblearn.over_sampling import SMOTE
+# Feature Engineering - Date Features
+df['Date'] = pd.to_datetime(df['Date'])
+
+# Extract basic temporal features
+df['Day'] = df['Date'].dt.day
+df['Day_of_Week'] = df['Date'].dt.day_name()
+
+# Add WeekOfYear and DayOfYear
+df['WeekOfYear'] = df['Date'].dt.isocalendar().week.astype(int)
+df['DayOfYear'] = df['Date'].dt.dayofyear
+
+# Add Festival Period
+df['Festival_Period'] = df['Month'].isin([9, 10, 11]).astype(int)
+
+print("Added temporal features: Day, Day_of_Week, WeekOfYear, DayOfYear, Festival_Period.")
+
+# Feature Engineering - Commodity and Season Interaction
+df['Commodity_Season'] = df['Commodity'] + "_" + df['Season']
+print("Added interaction feature: Commodity_Season.")
+
+# Frequency Encoding for Commodity
+commodity_freq = df['Commodity'].value_counts(normalize=True).to_dict()
+df['Commodity_Freq'] = df['Commodity'].map(commodity_freq)
+
+print("Added frequency encoding for Commodity.")
+
+# Add Cluster-based Feature Using KMeans
+price_features = ['Min Price', 'Max Price', 'Avg Price']
+kmeans = KMeans(n_clusters=4, random_state=42)
+df['Price_Cluster'] = kmeans.fit_predict(df[price_features])
+
+print("Added cluster-based feature using KMeans on price columns.")
+
+# One-Hot Encode Categorical Features
+df_encoded_clf = pd.get_dummies(
+    df,
+    columns=['Unit', 'Day_of_Week', 'Season', 'Commodity_Season'],
+    prefix=['Unit', 'DoW', 'Season', 'ItemSeason'],
+    drop_first=True
+)
+
+print("Applied one-hot encoding to categorical features.")
+
+# Define Features and Target for Classification
+leak_cols = ['Avg Price', 'Min Price', 'Max Price', 'Price Range', 'Price_Class', 'Date']
+X_clf_all = df_encoded_clf.drop(columns=leak_cols, errors='ignore')
+y_clf_all = df['Price_Class']
+
+# Include engineered features
+features_clf = [
+    'Year', 'Month', 'Day', 'WeekOfYear', 'DayOfYear', 'Festival_Period',
+    'Commodity_Freq', 'Price_Cluster'
+] + [col for col in X_clf_all.columns if (
+    col.startswith('Item_') or
+    col.startswith('Season_') or
+    col.startswith('DoW_') or
+    col.startswith('Unit_')
+)]
+
+X_clf = X_clf_all[features_clf]
+y_clf = y_clf_all
+
+print(f"Selected {len(features_clf)} features for classification.")
+
+# Train-Test Split
+X_train_clf, X_test_clf, y_train_clf, y_test_clf = train_test_split(
+    X_clf, y_clf, test_size=0.2, random_state=42, stratify=y_clf
+)
+
+print(f"Training set shape: {X_train_clf.shape}")
+print(f"Testing set shape: {X_test_clf.shape}")
+
+# Apply SMOTE to Handle Class Imbalance
+smote = SMOTE(random_state=42)
+X_train_clf_res, y_train_clf_res = smote.fit_resample(X_train_clf, y_train_clf)
+
+print("Applied SMOTE to oversample minority classes.")
+print("Resampled training set shape:", X_train_clf_res.shape)
+
+#  Build Random Forest Pipeline with Class Weight
+clf_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('classifier', RandomForestClassifier(
+        n_estimators=200,
+        max_depth=15,
+        class_weight='balanced',
+        random_state=42
+    ))
+])
+
+print("Built Random Forest pipeline with class weights to handle imbalance.")
+
+# Hyperparameter Tuning with GridSearchCV
+param_grid = {
+    'classifier__n_estimators': [100, 200],
+    'classifier__max_depth': [10, 15, 20]
+}
+
+grid_search = GridSearchCV(
+    clf_pipeline,
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+
+grid_search.fit(X_train_clf_res, y_train_clf_res)
+
+print("Best Parameters from GridSearchCV:", grid_search.best_params_)
+
+# Predict and Evaluate on Test Set
+best_clf = grid_search.best_estimator_
+# Cross-Validation on Oversampled Training Set
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+cv_scores_final = cross_val_score(
+    best_clf,
+    X_train_clf_res,
+    y_train_clf_res,
+    cv=kf,
+    scoring='accuracy'
+)
+
+print("\n5-Fold Cross-Validation Results on Oversampled Training Set:")
+print(f"Mean Accuracy: {cv_scores_final.mean():.4f}")
+print(f"Std Dev: {cv_scores_final.std():.4f}")
+
+y_pred_clf = best_clf.predict(X_test_clf)
+
+accuracy = accuracy_score(y_test_clf, y_pred_clf)
+print(f"Test Set Accuracy: {accuracy:.4f}")
+
+print("\nClassification Report:")
+print(classification_report(y_test_clf, y_pred_clf))
+
+# Confusion Matrix
+from sklearn.metrics import confusion_matrix
+
+cm = confusion_matrix(y_test_clf, y_pred_clf, labels=best_clf.named_steps['classifier'].classes_)
+classes = best_clf.named_steps['classifier'].classes_
+
+# Display the matrix
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=classes, yticklabels=classes)
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Random Forest Classifier - Confusion Matrix')
+plt.show()
+
+# Print as DataFrame
+cm_df = pd.DataFrame(cm, index=classes, columns=classes)
+print("\nConfusion Matrix:")
+print(cm_df)
+
+# Calculate FP and FN per class
+false_positives = {}
+false_negatives = {}
+
+for idx, cls in enumerate(classes):
+    fp = cm[:, idx].sum() - cm[idx, idx]
+    fn = cm[idx, :].sum() - cm[idx, idx]
+    false_positives[cls] = fp
+    false_negatives[cls] = fn
+
+# Print False Positives and False Negatives
+print("\nFalse Positives and False Negatives per Class:")
+for cls in classes:
+    print(f"Class: {cls}")
+    print(f"   False Positives: {false_positives[cls]}")
+    print(f"   False Negatives: {false_negatives[cls]}")
+
+# Plot FP and FN as bar chart
+fp_fn_df = pd.DataFrame({
+    'Class': classes,
+    'False Positives': [false_positives[cls] for cls in classes],
+    'False Negatives': [false_negatives[cls] for cls in classes]
+})
+
+fp_fn_df.set_index('Class').plot(kind='bar', figsize=(8, 6), colormap='Set2')
+plt.title('False Positives and False Negatives per Class')
+plt.ylabel('Count')
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# Feature Importance Plot
+
+# Extract trained Random Forest model from pipeline
+rf_model = best_clf.named_steps['classifier']
+
+# Get feature importances and feature names
+importances = rf_model.feature_importances_
+feature_names = X_clf.columns
+
+# Create DataFrame for easier plotting
+importance_df = pd.DataFrame({
+    'Feature': feature_names,
+    'Importance': importances
+}).sort_values(by='Importance', ascending=False)
+
+# Plot Top 20 Features
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=importance_df.head(20), palette='viridis')
+plt.title('Top 20 Important Features in Random Forest Classifier')
+plt.xlabel('Importance Score')
+plt.ylabel('Feature')
+plt.tight_layout()
+plt.show()
+
