@@ -16,35 +16,6 @@ This project is a comprehensive data analytics case study based on the Kalimati 
 - ✅ Visualizations saved to `plots/` directory
 - ✅ Cross-validation applied for both regression and classification tasks
 
----
-
-## 🗂️ Folder Structure
-
-kalimati-market-analysis/
-│
-├── data/
-│ ├── kalimati-tarkari-prices-from-may-2021-to-september-2023.csv
-│ └── cleaned_kalimati_data_final.csv
-│
-├── notebooks/
-│ └── Kalimati_Market_Analysis.ipynb
-│
-├── plots/
-│ ├── eda_avg_price_distribution.png
-│ ├── correlation_heatmap.png
-│ ├── lr_actual_vs_predicted.png
-│ ├── rf_actual_vs_predicted.png
-│ └── kmeans_clustering.png
-│
-├── README.md
-├── requirements.txt
-└── .gitignore
-
-yaml
-Copy
-Edit
-
----
 
 ## ⚠️ Important Note on File Paths
 
